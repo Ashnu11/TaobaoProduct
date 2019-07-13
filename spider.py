@@ -5,15 +5,24 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 from pyquery import PyQuery as pq
-from config import *
 from urllib.parse import quote
+import requests
+import os
+from hashlib import md5
 
 # browser = webdriver.Chrome()
 # browser = webdriver.PhantomJS(service_args=SERVICE_ARGS)
+MONGO_URL = 'localhost'
+MONGO_DB = 'taobao'
+MONGO_COLLECTION = 'products'
 
-chrome_options = webdriver.ChromeOptions()
-chrome_options.add_argument('--headless')
-browser = webdriver.Chrome(chrome_options=chrome_options)
+KEYWORD = '丝袜'
+MAX_PAGE = 100
+
+
+options = webdriver.ChromeOptions()
+#chrome_options.add_argument('--headless')
+browser = webdriver.Chrome(options=options)
 
 wait = WebDriverWait(browser, 10)
 client = pymongo.MongoClient(MONGO_URL)
@@ -29,6 +38,7 @@ def index_page(page):
     try:
         url = 'https://s.taobao.com/search?q=' + quote(KEYWORD)
         browser.get(url)
+        #下面if里面的代码实现页面跳转
         if page > 1:
             input = wait.until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, '#mainsrp-pager div.form > input')))
@@ -37,8 +47,10 @@ def index_page(page):
             input.clear()
             input.send_keys(page)
             submit.click()
+        #等待跳转成功
         wait.until(
             EC.text_to_be_present_in_element((By.CSS_SELECTOR, '#mainsrp-pager li.item.active > span'), str(page)))
+        #等待商品加载出来
         wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, '.m-itemlist .items .item')))
         get_products()
     except TimeoutException:
@@ -51,10 +63,10 @@ def get_products():
     """
     html = browser.page_source
     doc = pq(html)
-    items = doc('#mainsrp-itemlist .items .item').items()
+    items = doc('#mainsrp-itemlist .m-itemlist .items .item').items()
     for item in items:
         product = {
-            'image': item.find('.pic .img').attr('data-src'),
+            'image': 'https:'+item.find('.pic .img').attr('data-src'),
             'price': item.find('.price').text(),
             'deal': item.find('.deal-cnt').text(),
             'title': item.find('.title').text(),
@@ -62,21 +74,26 @@ def get_products():
             'location': item.find('.location').text()
         }
         print(product)
-        save_to_mongo(product)
-
-
-def save_to_mongo(result):
-    """
-    保存至MongoDB
-    :param result: 结果
-    """
+        save_picture(product)
+def save_picture(result):
+    response = requests.get(result['image'])
+    img_path = 'img'
+    if not os.path.exists(img_path):
+        os.makedirs(img_path)
     try:
-        if db[MONGO_COLLECTION].insert(result):
-            print('存储到MongoDB成功')
-    except Exception:
-        print('存储到MongoDB失败')
-
-
+        print(response.content)
+        if response.status_code == 200:
+            file_path = img_path + os.path.sep + '{file_name}.{file_suffix}'.format(
+                file_name=md5(response.content).hexdigest(),
+                file_suffix='jpg')
+            if not os.path.exists(file_path):
+                with open(file_path, 'wb') as f:
+                    f.write(response.content)
+                print('Downloaded image path is %s' % file_path)
+            else:
+                print('Already Downloaded', file_path)
+    except Exception as e:
+        print(e)
 def main():
     """
     遍历每一页
