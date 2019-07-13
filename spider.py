@@ -75,6 +75,7 @@ def get_products():
         }
         print(product)
         save_picture(product)
+        save_to_mongo(product)
 def save_picture(result):
     response = requests.get(result['image'])
     img_path = 'img'
@@ -94,6 +95,16 @@ def save_picture(result):
                 print('Already Downloaded', file_path)
     except Exception as e:
         print(e)
+def save_to_mongo(result):
+    """
+    保存至MongoDB
+    :param result: 结果
+    """
+    try:
+        if db[MONGO_COLLECTION].insert(result):
+            print('存储到MongoDB成功')
+    except Exception:
+        print('存储到MongoDB失败')
 def main():
     """
     遍历每一页
