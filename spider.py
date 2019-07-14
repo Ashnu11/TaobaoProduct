@@ -17,16 +17,20 @@ MONGO_DB = 'taobao'
 KEYWORD = 'ps4'
 MONGO_COLLECTION = KEYWORD
 MAX_PAGE = 10
-
+url = 'https://login.taobao.com/member/login.jhtml'
+chromedriver_path = "D:/MyPython/Scripts/chromedriver.exe"  # 改成你的chromedriver的完整路径地址
+weibo_username = "改成你的微博账号"  # 改成你的微博账号
+weibo_password = "改成你的微博密码"  # 改成你的微博密码
 
 options = webdriver.ChromeOptions()
+options.add_experimental_option('excludeSwitches',
+                                ['enable-automation'])  # 此步骤很重要，设置为开发者模式，防止被各大网站识别出来使用了Selenium
+browser = webdriver.Chrome(executable_path=chromedriver_path, options=options)
+wait = WebDriverWait(browser, 10)  # 超时时长为10s
 #chrome_options.add_argument('--headless')
-browser = webdriver.Chrome(options=options)
-
-wait = WebDriverWait(browser, 10)
 client = pymongo.MongoClient(MONGO_URL)
 db = client[MONGO_DB]
-
+browser.get(url)
 
 def index_page(page):
     """
@@ -108,10 +112,41 @@ def save_to_mongo(result):
             print('Save to MongoDB success!')
     except Exception:
         print('Cannt save to MongoDB!')
+
+def auto_login():
+
+    # 打开网页
+    # 等待 密码登录选项 出现
+    password_login = wait.until(
+        EC.presence_of_element_located((By.CSS_SELECTOR, '.qrcode-login > .login-links > .forget-pwd')))
+    password_login.click()
+
+    # 等待 微博登录选项 出现
+    weibo_login = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, '.weibo-login')))
+    weibo_login.click()
+
+    # 等待 微博账号 出现
+    weibo_user = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, '.username > .W_input')))
+    weibo_user.send_keys(weibo_username)
+
+    # 等待 微博密码 出现
+    weibo_pwd = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, '.password > .W_input')))
+    weibo_pwd.send_keys(weibo_password)
+
+    # 等待 登录按钮 出现
+    submit = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, '.btn_tip > a > span')))
+    submit.click()
+
+    # 直到获取到淘宝会员昵称才能确定是登录成功
+    taobao_name = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR,
+                                                                  '.site-nav-bd > ul.site-nav-bd-l > li#J_SiteNavLogin > div.site-nav-menu-hd > div.site-nav-user > a.site-nav-login-info-nick ')))
+    # 输出淘宝昵称
+    print("登陆成功" + taobao_name.text)
 def main():
     """
     遍历每一页
     """
+    auto_login()
     try:
         for i in range(1, MAX_PAGE + 1):
             index_page(i)
