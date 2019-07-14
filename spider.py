@@ -14,10 +14,9 @@ from hashlib import md5
 # browser = webdriver.PhantomJS(service_args=SERVICE_ARGS)
 MONGO_URL = 'localhost'
 MONGO_DB = 'taobao'
-MONGO_COLLECTION = 'products'
-
-KEYWORD = '美少女'
-MAX_PAGE = 100
+KEYWORD = 'ps4'
+MONGO_COLLECTION = KEYWORD
+MAX_PAGE = 10
 
 
 options = webdriver.ChromeOptions()
@@ -55,7 +54,9 @@ def index_page(page):
         get_products()
     except TimeoutException:
         index_page(page)
-
+    # finally:
+    #     results = db[MONGO_COLLECTION].count_documents()
+    #     print("A total of "+results+" data were obtained")
 
 def get_products():
     """
@@ -73,10 +74,12 @@ def get_products():
             'shop': item.find('.shop').text(),
             'location': item.find('.location').text()
         }
-        print(product)
+        #print(product)
         save_picture(product)
+        save_to_mongo(product)
 def save_picture(result):
     response = requests.get(result['image'])
+    filename = result['title']
     img_path = 'img'
     if not os.path.exists(img_path):
         os.makedirs(img_path)
@@ -84,7 +87,8 @@ def save_picture(result):
         print(response.content)
         if response.status_code == 200:
             file_path = img_path + os.path.sep + '{file_name}.{file_suffix}'.format(
-                file_name=md5(response.content).hexdigest(),
+                # file_name=md5(response.content).hexdigest(),
+                file_name = filename,
                 file_suffix='jpg')
             if not os.path.exists(file_path):
                 with open(file_path, 'wb') as f:
@@ -94,12 +98,25 @@ def save_picture(result):
                 print('Already Downloaded', file_path)
     except Exception as e:
         print(e)
+def save_to_mongo(result):
+    """
+    保存至MongoDB
+    :param result: 结果
+    """
+    try:
+        if db[MONGO_COLLECTION].insert(result):
+            print('Save to MongoDB success!')
+    except Exception:
+        print('Cannt save to MongoDB!')
 def main():
     """
     遍历每一页
     """
-    for i in range(1, MAX_PAGE + 1):
-        index_page(i)
+    try:
+        for i in range(1, MAX_PAGE + 1):
+            index_page(i)
+    except BaseException as e :
+        print(e)
     browser.close()
 
 
